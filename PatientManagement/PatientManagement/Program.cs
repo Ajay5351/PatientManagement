@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PatientManagement.Data;
+using PatientManagement.Models;
 using PatientManagement.Repository;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,9 +10,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<PatientContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("PatientDb")));
 
+builder.Services.AddIdentity<ApplicationModel, IdentityRole>()
+    .AddEntityFrameworkStores<PatientContext>()
+    .AddDefaultTokenProviders();
+
 builder.Services.AddControllers();
 
 builder.Services.AddTransient<IPatientRepository, PatientRepository>();
+builder.Services.AddTransient<IAccountRepository, AccountRepository>();
 
 builder.Services.AddAutoMapper(typeof(Program));
 
