@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using PatientManagement.Data;
 using PatientManagement.Models;
 using PatientManagement.Repository;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +16,29 @@ builder.Services.AddDbContext<PatientContext>(options =>
 builder.Services.AddIdentity<ApplicationModel, IdentityRole>()
     .AddEntityFrameworkStores<PatientContext>()
     .AddDefaultTokenProviders();
+
+builder.Services.AddAuthentication(option =>
+{
+    option.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    option.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    option.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+
+           .AddJwtBearer(option =>
+           {
+               option.SaveToken = true;
+               option.RequireHttpsMetadata = false;
+
+               option.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
+               {
+                   ValidateIssuer = true,
+                   ValidateAudience = true,
+                   ValidateIssuerSigningKey = true,
+                   ValidAudience = builder.Configuration["Jwt:ValidAudience"],
+                   ValidIssuer = builder.Configuration["Jwt:ValidIssuer"],
+                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]))
+               };
+           });
 
 builder.Services.AddControllers();
 
@@ -36,6 +62,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

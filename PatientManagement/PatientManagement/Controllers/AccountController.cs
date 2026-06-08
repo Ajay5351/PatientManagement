@@ -28,5 +28,18 @@ namespace PatientManagement.Controllers
 
             return Unauthorized();
         }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] SignInModel signInModel)
+        {
+            var result = await _accountRepository.LoginAsync(signInModel);
+
+            if (result != null)
+            {
+                return Ok(result);
+            }
+
+            return Unauthorized();
+        }
     }
 }
