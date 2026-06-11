@@ -1,4 +1,4 @@
-﻿using PatientManagement.Data;
+﻿using PatientManagement.Models;
 
 namespace PatientManagement.Repository
 {

@@ -2,7 +2,7 @@
 
 namespace PatientManagement.Models
 {
-    public class PatientModel
+    public class Patient
     {
         public int Id { get; set; }
 

@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PatientManagement.Data;
+using PatientManagement.Models;
 using PatientManagement.Repository;
 
 namespace PatientManagement.Controllers
