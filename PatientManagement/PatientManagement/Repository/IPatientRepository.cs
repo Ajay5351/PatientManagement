@@ -4,7 +4,7 @@ namespace PatientManagement.Repository
 {
     public interface IPatientRepository
     {
-        Task<List<Patient>> GetAllPatients();
+        Task<PagedPatientResult> GetAllPatients(string? term, string? sort, int page, int limit);
         Task<Patient?> GetPatientById(int id);
         Task<Patient> AddPatients(Patient patient);
         Task<Patient> UpdatePatient(Patient patient);

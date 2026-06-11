@@ -14,9 +14,64 @@ namespace PatientManagement.Repository
             _context = context;
         }
 
-        public async Task<List<Patient>> GetAllPatients()
+        public async Task<PagedPatientResult> GetAllPatients(string? term,string? sort,int page,int limit)
         {
-            return await _context.Patients.ToListAsync();
+            IQueryable<Patient> patients = _context.Patients;
+
+            // Filtering
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                term = term.Trim().ToLower();
+
+                patients = patients.Where(p =>
+                    p.FirstName.ToLower().Contains(term) ||
+                    p.LastName.ToLower().Contains(term) ||
+                    p.Gender.ToLower().Contains(term) ||
+                    p.Email.ToLower().Contains(term) ||
+                    p.ContactNumber.Contains(term));
+            }
+
+            // Sorting
+            patients = sort?.ToLower() switch
+            {
+                "firstname" => patients.OrderBy(p => p.FirstName),
+                "-firstname" => patients.OrderByDescending(p => p.FirstName),
+
+                "lastname" => patients.OrderBy(p => p.LastName),
+                "-lastname" => patients.OrderByDescending(p => p.LastName),
+
+                "email" => patients.OrderBy(p => p.Email),
+                "-email" => patients.OrderByDescending(p => p.Email),
+
+                "weight" => patients.OrderBy(p => p.Weight),
+                "-weight" => patients.OrderByDescending(p => p.Weight),
+
+                "height" => patients.OrderBy(p => p.Height),
+                "-height" => patients.OrderByDescending(p => p.Height),
+
+                "createddate" => patients.OrderBy(p => p.CreatedDate),
+                "-createddate" => patients.OrderByDescending(p => p.CreatedDate),
+
+                _ => patients.OrderBy(p => p.Id)
+            };
+
+            // Pagination
+            var totalCount = await patients.CountAsync();
+
+            var totalPages = (int)Math.Ceiling(
+                totalCount / (double)limit);
+
+            var pagedPatients = await patients
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .ToListAsync();
+
+            return new PagedPatientResult
+            {
+                Patients = pagedPatients,
+                TotalCount = totalCount,
+                TotalPages = totalPages
+            };
         }
 
         public async Task<Patient?> GetPatientById(int id)

@@ -50,6 +50,10 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddMemoryCache();
+builder.Services.AddLazyCache();
+
+
 builder.Services.AddControllers();
 
 builder.Services.AddTransient<IPatientRepository, PatientRepository>();

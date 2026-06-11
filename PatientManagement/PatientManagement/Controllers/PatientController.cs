@@ -1,5 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using LazyCache;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using PatientManagement.Caching;
 using PatientManagement.Models;
 using PatientManagement.Repository;
 
@@ -11,33 +14,73 @@ namespace PatientManagement.Controllers
     public class PatientController : ControllerBase
     {
         private readonly IPatientRepository _patientRepository;
+        private readonly ICacheProvider _cacheProvider;
 
-        public PatientController(IPatientRepository patientRepository)
+        public PatientController(IPatientRepository patientRepository, ICacheProvider cacheProvider)
         {
             _patientRepository = patientRepository;
+            _cacheProvider = cacheProvider;
         }
 
-        [HttpGet("")]
-        public async Task<IActionResult> GetPatients()
+        [HttpGet]
+        public async Task<IActionResult> GetPatients([FromQuery] string? term, [FromQuery] string? sort, [FromQuery] int page = 1,
+        [FromQuery] int limit = 5)
         {
-            var patients = await _patientRepository.GetAllPatients();
+            string cacheKey = $"Patients_{term}_{sort}_{page}_{limit}";
 
-            if (patients == null || !patients.Any())
+            if (!_cacheProvider.TryGetValue(cacheKey,
+                out PagedPatientResult? result))
             {
-                return NotFound("No patients found.");
+                result = await _patientRepository.GetAllPatients(term, sort, page, limit);
+
+                if (result == null)
+                    return NotFound("No patients found");
+
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                {
+                    AbsoluteExpirationRelativeToNow =
+                        TimeSpan.FromSeconds(30),
+
+                    SlidingExpiration =
+                        TimeSpan.FromSeconds(30),
+
+                    Size = 1000
+                };
+
+                _cacheProvider.Set(
+                    cacheKey,
+                    result,
+                    cacheEntryOptions);
             }
 
-            return Ok(patients);
+            Response.Headers.Append(
+                "X-Total-Count",
+                result!.TotalCount.ToString());
+
+            Response.Headers.Append(
+                "X-Total-Pages",
+                result.TotalPages.ToString());
+
+            return Ok(result.Patients);
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetPatientById([FromRoute] int id)
         {
-            var patient = await _patientRepository.GetPatientById(id);
-
-            if (patient == null)
+            if (!_cacheProvider.TryGetValue(CacheKeys.Patient, out Patient? patient))
             {
-                return NotFound();
+                patient = await _patientRepository.GetPatientById(id);
+
+                if (patient == null)
+                    return NotFound("Patient not found");
+
+                var cacheEntryOptions = new MemoryCacheEntryOptions()
+                {
+                    AbsoluteExpiration = DateTime.Now.AddSeconds(30),
+                    SlidingExpiration = TimeSpan.FromSeconds(30),
+                    Size = 1000
+                };
+                _cacheProvider.Set(CacheKeys.Patient, patient, cacheEntryOptions);
             }
 
             return Ok(patient);
