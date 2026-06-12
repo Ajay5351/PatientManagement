@@ -2,11 +2,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using PatientManagement.Caching;
+using PatientManagement.API.Caching;
 using PatientManagement.Models;
-using PatientManagement.Repository;
+using PatientManagement.BusinessLogic;
 
-namespace PatientManagement.Controllers
+namespace PatientManagement.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

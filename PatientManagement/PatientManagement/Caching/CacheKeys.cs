@@ -1,4 +1,4 @@
-﻿namespace PatientManagement.Caching
+﻿namespace PatientManagement.API.Caching
 {
     public static class CacheKeys
     {

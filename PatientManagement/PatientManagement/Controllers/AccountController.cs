@@ -1,9 +1,8 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using PatientManagement.Models;
-using PatientManagement.Repository;
+using PatientManagement.BusinessLogic;
 
-namespace PatientManagement.Controllers
+namespace PatientManagement.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]

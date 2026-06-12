@@ -1,9 +1,8 @@
-﻿using AutoMapper;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using PatientManagement.Data;
 using PatientManagement.Models;
 
-namespace PatientManagement.Repository
+namespace PatientManagement.BusinessLogic
 {
     public class PatientRepository : IPatientRepository
     {

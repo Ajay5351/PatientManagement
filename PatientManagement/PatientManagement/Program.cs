@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PatientManagement.Data;
 using PatientManagement.Models;
-using PatientManagement.Repository;
+using PatientManagement.BusinessLogic;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);

@@ -1,6 +1,6 @@
 ﻿using PatientManagement.Models;
 
-namespace PatientManagement.Repository
+namespace PatientManagement.BusinessLogic
 {
     public interface IPatientRepository
     {
