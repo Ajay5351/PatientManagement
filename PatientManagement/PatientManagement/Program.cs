@@ -2,19 +2,21 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using PatientManagement.BusinessLogic;
+using PatientManagement.BusinessLogic.Helpers;
+using PatientManagement.BusinessLogic.Implementation;
 using PatientManagement.Data;
 using PatientManagement.Models;
-using PatientManagement.BusinessLogic;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddDbContext<PatientContext>(options =>
+builder.Services.AddDbContext<PatientDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("PatientDb")));
 
 builder.Services.AddIdentity<ApplicationModel, IdentityRole>()
-    .AddEntityFrameworkStores<PatientContext>()
+    .AddEntityFrameworkStores<PatientDbContext>()
     .AddDefaultTokenProviders();
 
 builder.Services.AddAuthentication(option =>
@@ -54,7 +56,13 @@ builder.Services.AddMemoryCache();
 builder.Services.AddLazyCache();
 
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddNewtonsoftJson();
+builder.Services.AddAutoMapper(typeof(PatientProfile).Assembly);
+
+builder.Services.AddTransient<Filtering>();
+builder.Services.AddTransient<Sorting>();
+builder.Services.AddTransient<Pagination>();
+builder.Services.AddTransient<MemoryCaching>();
 
 builder.Services.AddTransient<IPatientRepository, PatientRepository>();
 builder.Services.AddTransient<IAccountRepository, AccountRepository>();

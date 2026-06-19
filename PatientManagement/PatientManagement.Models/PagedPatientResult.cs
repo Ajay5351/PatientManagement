@@ -2,7 +2,7 @@
 {
     public class PagedPatientResult
     {
-        public List<Patient> Patients { get; set; } = new();
+        public List<PatientModel> Patients { get; set; } = new();
 
         public int TotalCount { get; set; }
 

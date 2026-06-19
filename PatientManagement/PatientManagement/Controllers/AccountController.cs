@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using PatientManagement.Models;
 using PatientManagement.BusinessLogic;
+using PatientManagement.Models;
 
 namespace PatientManagement.API.Controllers
 {
@@ -23,25 +23,20 @@ namespace PatientManagement.API.Controllers
                 return BadRequest(ModelState);
             }
 
-            try
+            var result = await _accountRepository.SignupAsync(signupModel);
+
+            if (result.Succeeded)
             {
-                var result = await _accountRepository.SignupAsync(signupModel);
-
-                if (result.Succeeded)
+                return Ok(new
                 {
-                    return Ok(new
-                    {
-                        Message = "User registered successfully"
-                    });
-                }
-
-                return BadRequest(result.Errors);
+                    Message = "User registered successfully"
+                });
             }
-            catch (Exception ex)
+            else
             {
                 return BadRequest(new
                 {
-                    Message = ex.Message
+                    Message = "User registration failed",
                 });
             }
         }
@@ -54,30 +49,20 @@ namespace PatientManagement.API.Controllers
                 return BadRequest(ModelState);
             }
 
-            try
+            var token = await _accountRepository.LoginAsync(signInModel);
+
+            if (string.IsNullOrEmpty(token))
             {
-                var token = await _accountRepository.LoginAsync(signInModel);
-
-                if (string.IsNullOrEmpty(token))
+                return Unauthorized(new
                 {
-                    return Unauthorized(new
-                    {
-                        Message = "Invalid email or password"
-                    });
-                }
-
-                return Ok(new
-                {
-                    Token = token
+                    Message = "Invalid email or password"
                 });
             }
-            catch (Exception ex)
+
+            return Ok(new
             {
-                return BadRequest(new
-                {
-                    Message = ex.Message
-                });
-            }
+                Token = token
+            });
         }
     }
 }

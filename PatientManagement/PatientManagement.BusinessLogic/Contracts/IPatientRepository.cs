@@ -1,13 +1,16 @@
-﻿using PatientManagement.Models;
+﻿using Microsoft.AspNetCore.JsonPatch;
+using PatientManagement.Models;
 
 namespace PatientManagement.BusinessLogic
 {
     public interface IPatientRepository
     {
-        Task<PagedPatientResult> GetAllPatients(string? term, string? sort, int page, int limit);
-        Task<Patient?> GetPatientById(int id);
-        Task<Patient> AddPatients(Patient patient);
-        Task<Patient> UpdatePatient(Patient patient);
-        Task DeletePatient(int id);
+        Task<PagedPatientResult> GetAllPatientsAsync(PatientRequestModel requestModel);
+        Task<PatientModel?> GetPatientByIdAsync(int id);
+        Task<PatientModel> AddPatientAsync(PatientCreateRequest createdPatient);
+        Task<PatientModel> UpdatePatientAsync(PatientModel existingPatient, PatientUpdateRequest updateRequest);
+        Task<PatientModel> PatchPatientAsync(PatientModel existingPatient, JsonPatchDocument<PatientModel> patient);
+        Task DeletePatientAsync(PatientModel existingPatient);
+        Task<bool> IsPatientExistsAsync(string? email);
     }
 }

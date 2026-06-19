@@ -1,10 +1,8 @@
-﻿using LazyCache;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
-using PatientManagement.API.Caching;
-using PatientManagement.Models;
 using PatientManagement.BusinessLogic;
+using PatientManagement.Models;
 
 namespace PatientManagement.API.Controllers
 {
@@ -14,135 +12,98 @@ namespace PatientManagement.API.Controllers
     public class PatientController : ControllerBase
     {
         private readonly IPatientRepository _patientRepository;
-        private readonly ICacheProvider _cacheProvider;
 
-        public PatientController(IPatientRepository patientRepository, ICacheProvider cacheProvider)
+        public PatientController(IPatientRepository patientRepository)
         {
             _patientRepository = patientRepository;
-            _cacheProvider = cacheProvider;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetPatients([FromQuery] string? term, [FromQuery] string? sort, [FromQuery] int page = 1,
-        [FromQuery] int limit = 5)
+        public async Task<IActionResult> GetPatientsAsync([FromBody] PatientRequestModel requestModel)
         {
-            string cacheKey = $"Patients_{term}_{sort}_{page}_{limit}";
+            var patients = await _patientRepository.GetAllPatientsAsync(requestModel);
 
-            if (!_cacheProvider.TryGetValue(cacheKey,
-                out PagedPatientResult? result))
+            if (patients == null || patients.Patients.Count == 0)
             {
-                result = await _patientRepository.GetAllPatients(term, sort, page, limit);
-
-                if (result == null)
-                    return NotFound("No patients found");
-
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                {
-                    AbsoluteExpirationRelativeToNow =
-                        TimeSpan.FromSeconds(30),
-
-                    SlidingExpiration =
-                        TimeSpan.FromSeconds(30),
-
-                    Size = 1000
-                };
-
-                _cacheProvider.Set(
-                    cacheKey,
-                    result,
-                    cacheEntryOptions);
+                return NotFound("No patients found.");
             }
 
-            Response.Headers.Append(
-                "X-Total-Count",
-                result!.TotalCount.ToString());
+            Response.Headers.Append("X-Total-Count", patients.Patients.Count.ToString());
+            Response.Headers.Append("X-Total-Pages", patients.TotalPages.ToString());
 
-            Response.Headers.Append(
-                "X-Total-Pages",
-                result.TotalPages.ToString());
-
-            return Ok(result.Patients);
+            return Ok(patients);
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetPatientById([FromRoute] int id)
+        public async Task<IActionResult> GetPatientByIdAsync([FromRoute] int id)
         {
-            if (!_cacheProvider.TryGetValue(CacheKeys.Patient, out Patient? patient))
+            var patient = await _patientRepository.GetPatientByIdAsync(id);
+
+            if (patient == null)
             {
-                patient = await _patientRepository.GetPatientById(id);
-
-                if (patient == null)
-                    return NotFound("Patient not found");
-
-                var cacheEntryOptions = new MemoryCacheEntryOptions()
-                {
-                    AbsoluteExpiration = DateTime.Now.AddSeconds(30),
-                    SlidingExpiration = TimeSpan.FromSeconds(30),
-                    Size = 1000
-                };
-                _cacheProvider.Set(CacheKeys.Patient, patient, cacheEntryOptions);
+                return NotFound($"Patient with Id {id} not found.");
             }
 
             return Ok(patient);
         }
 
         [HttpPost("")]
-        public async Task<IActionResult> AddPatient([FromBody] Patient patient)
+        public async Task<IActionResult> AddPatientAsync([FromBody] PatientCreateRequest patient)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            try
-            {
-                var createdPatient = await _patientRepository.AddPatients(patient);
+            bool isPatientExists = await _patientRepository.IsPatientExistsAsync(patient.Email);
 
-                return CreatedAtAction(nameof(GetPatientById), new { id = createdPatient.Id }, createdPatient);
-            }
+            if (isPatientExists)
+                return Conflict($"A patient with email {patient.Email} already exists.");
 
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred while checking for existing patient: {ex.Message}");
-            }
+            var createdPatient = await _patientRepository.AddPatientAsync(patient);
+            return Ok(createdPatient);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdatePatient([FromRoute] int id, [FromBody] Patient patient)
+        public async Task<IActionResult> UpdatePatientAsync([FromRoute] int id, [FromBody] PatientUpdateRequest patient)
         {
-            if (!ModelState.IsValid)
+            var existingPatient = await _patientRepository.GetPatientByIdAsync(id);
+
+            if (existingPatient == null)
             {
-                return BadRequest(ModelState);
+                return NotFound($"Patient with Id {id} not found.");
             }
 
-            patient.Id = id;
-
-            try
-            {
-                var updatedPatient = await _patientRepository.UpdatePatient(patient);
-
-                return Ok(updatedPatient);
-            }
-
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred while updating the patient: {ex.Message}");
-            }
+            var updatedPatient = await _patientRepository.UpdatePatientAsync(existingPatient, patient);
+            return Ok(updatedPatient);
         }
-        
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeletePatient([FromRoute] int id)
+
+        [HttpPatch("{id}")]
+        public async Task<IActionResult> PatchPatientAsync(int id, [FromBody] JsonPatchDocument<PatientModel> patient)
         {
-            try
+            var existingPatient = await _patientRepository.GetPatientByIdAsync(id);
+
+            if (existingPatient == null)
             {
-                await _patientRepository.DeletePatient(id);
-                return NoContent();
+                return NotFound($"Patient with Id {id} not found.");
             }
 
-            catch (Exception ex)
+            var patchedPatient = await _patientRepository.PatchPatientAsync(existingPatient, patient);
+            return Ok(patchedPatient);
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeletePatientAsync([FromRoute] int id)
+        {
+            var existingPatient = await _patientRepository.GetPatientByIdAsync(id);
+
+            if (existingPatient == null)
             {
-                return StatusCode(500, $"An error occurred while deleting the patient: {ex.Message}");
+                return NotFound($"Patient with Id {id} not found.");
             }
+
+            await _patientRepository.DeletePatientAsync(existingPatient);
+            return Ok($"Patient with Id {id} deleted successfully.");
         }
     }
 }

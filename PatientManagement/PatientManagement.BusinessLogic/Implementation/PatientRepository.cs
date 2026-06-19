@@ -1,4 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using AutoMapper;
+using LazyCache;
+using Microsoft.AspNetCore.JsonPatch;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using PatientManagement.BusinessLogic.Implementation;
 using PatientManagement.Data;
 using PatientManagement.Models;
 
@@ -6,91 +11,56 @@ namespace PatientManagement.BusinessLogic
 {
     public class PatientRepository : IPatientRepository
     {
-        private readonly PatientContext _context;
+        private readonly PatientDbContext _context;
+        private readonly IMapper _mapper;
+        private readonly MemoryCaching _memoryCaching;
+        private readonly Filtering _filtering;
+        private readonly Sorting _sorting;
+        private readonly Pagination _pagination;
 
-        public PatientRepository(PatientContext context)
+        public PatientRepository(PatientDbContext context, IMapper mapper, MemoryCaching memoryCaching, Filtering filtering, Sorting sorting, Pagination pagination)
         {
             _context = context;
+            _mapper = mapper;
+            _memoryCaching = memoryCaching;
+            _filtering = filtering;
+            _sorting = sorting;
+            _pagination = pagination;
         }
 
-        public async Task<PagedPatientResult> GetAllPatients(string? term,string? sort,int page,int limit)
+        public async Task<PagedPatientResult> GetAllPatientsAsync(PatientRequestModel requestModel)
         {
-            IQueryable<Patient> patients = _context.Patients;
+            var cachedResult = _memoryCaching.GetAllPatientsCache(requestModel);
 
-            // Filtering
-            if (!string.IsNullOrWhiteSpace(term))
+            if (cachedResult != null)
             {
-                term = term.Trim().ToLower();
-
-                patients = patients.Where(p =>
-                    p.FirstName.ToLower().Contains(term) ||
-                    p.LastName.ToLower().Contains(term) ||
-                    p.Gender.ToLower().Contains(term) ||
-                    p.Email.ToLower().Contains(term) ||
-                    p.ContactNumber.Contains(term));
+                return cachedResult;
             }
 
-            // Sorting
-            patients = sort?.ToLower() switch
-            {
-                "firstname" => patients.OrderBy(p => p.FirstName),
-                "-firstname" => patients.OrderByDescending(p => p.FirstName),
+            IQueryable<PatientModel> patients = _context.Patients.AsNoTracking();
 
-                "lastname" => patients.OrderBy(p => p.LastName),
-                "-lastname" => patients.OrderByDescending(p => p.LastName),
+            patients = _filtering.ApplyFiltering(patients, requestModel.Term);
 
-                "email" => patients.OrderBy(p => p.Email),
-                "-email" => patients.OrderByDescending(p => p.Email),
+            patients = _sorting.ApplySorting(patients, requestModel.Sort);
 
-                "weight" => patients.OrderBy(p => p.Weight),
-                "-weight" => patients.OrderByDescending(p => p.Weight),
+            var pagedPatients = await _pagination.ApplyPaginationAsync(patients, requestModel);
 
-                "height" => patients.OrderBy(p => p.Height),
-                "-height" => patients.OrderByDescending(p => p.Height),
+            _memoryCaching.SetPatientsCache(requestModel, pagedPatients);
 
-                "createddate" => patients.OrderBy(p => p.CreatedDate),
-                "-createddate" => patients.OrderByDescending(p => p.CreatedDate),
-
-                _ => patients.OrderBy(p => p.Id)
-            };
-
-            // Pagination
-            var totalCount = await patients.CountAsync();
-
-            var totalPages = (int)Math.Ceiling(
-                totalCount / (double)limit);
-
-            var pagedPatients = await patients
-                .Skip((page - 1) * limit)
-                .Take(limit)
-                .ToListAsync();
-
-            return new PagedPatientResult
-            {
-                Patients = pagedPatients,
-                TotalCount = totalCount,
-                TotalPages = totalPages
-            };
+            return pagedPatients;
         }
 
-        public async Task<Patient?> GetPatientById(int id)
+        public async Task<PatientModel?> GetPatientByIdAsync(int id)
         {
-            return await _context.Patients.FindAsync(id);
+            var patient = await _memoryCaching.GetPatientByIdCacheAsync(id,
+               async () => await _context.Patients.FindAsync(id));
+
+            return patient;
         }
 
-        public async Task<Patient> AddPatients(Patient patient)
+        public async Task<PatientModel> AddPatientAsync(PatientCreateRequest createdPatient)
         {
-            bool emailExists = await _context.Patients
-                .AnyAsync(x => x.Email == patient.Email);
-
-            if (emailExists)
-                throw new Exception("Email already exists.");
-
-            bool contactExists = await _context.Patients
-                .AnyAsync(x => x.ContactNumber == patient.ContactNumber);
-
-            if (contactExists)
-                throw new Exception("Contact Number already exists.");
+            var patient = _mapper.Map<PatientModel>(createdPatient);
 
             patient.CreatedDate = DateTime.UtcNow;
 
@@ -99,24 +69,9 @@ namespace PatientManagement.BusinessLogic
             return patient;
         }
 
-        public async Task<Patient> UpdatePatient(Patient patient)
+        public async Task<PatientModel> UpdatePatientAsync(PatientModel existingPatient, PatientUpdateRequest updateRequest)
         {
-            var existingPatient = await _context.Patients.FindAsync(patient.Id);
-
-            if (existingPatient == null)
-                throw new Exception("Patient not found.");
-
-            existingPatient.FirstName = patient.FirstName;
-            existingPatient.LastName = patient.LastName;
-            existingPatient.DateOfBirth = patient.DateOfBirth;
-            existingPatient.Gender = patient.Gender;
-            existingPatient.ContactNumber = patient.ContactNumber;
-            existingPatient.Weight = patient.Weight;
-            existingPatient.Height = patient.Height;
-            existingPatient.Email = patient.Email;
-            existingPatient.Address = patient.Address;
-            existingPatient.MedicalComments = patient.MedicalComments;
-            existingPatient.AnyMedicationsTaking = patient.AnyMedicationsTaking;
+            _mapper.Map(updateRequest, existingPatient);
             existingPatient.UpdatedDate = DateTime.UtcNow;
 
             _context.Patients.Update(existingPatient);
@@ -124,15 +79,25 @@ namespace PatientManagement.BusinessLogic
             return existingPatient;
         }
 
-        public async Task DeletePatient(int id)
+        public async Task<PatientModel> PatchPatientAsync(PatientModel existingPatient, JsonPatchDocument<PatientModel> patient)
         {
-            var patient = await _context.Patients.FindAsync(id);
+            existingPatient.UpdatedDate = DateTime.UtcNow;
 
-            if (patient == null)
-                throw new Exception("Patient not found.");
+            patient.ApplyTo(existingPatient);
 
-            _context.Patients.Remove(patient);
             await _context.SaveChangesAsync();
+            return existingPatient;
+        }
+
+        public async Task DeletePatientAsync(PatientModel existingPatient)
+        {
+            _context.Patients.Remove(existingPatient);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<bool> IsPatientExistsAsync(string? email)
+        {
+            return await _context.Patients.AnyAsync(p => p.Email == email);
         }
     }
 }
